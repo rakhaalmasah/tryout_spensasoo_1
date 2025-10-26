@@ -295,8 +295,7 @@ st.markdown(
     <div class="hero">
       <div class="hero-icon">📊</div>
       <div>
-        <h1 style="margin:0;">Pengumuman Hasil Try Out</h1>
-        <div class="subtitle">SMP Negeri 1 Sooko</div>
+        <h1 style="margin:0;">Pengumuman Hasil Try Out - SMP Negeri 1 Sooko Mojokerto</h1>
       </div>
     </div>
     """,
