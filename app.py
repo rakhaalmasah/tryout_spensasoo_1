@@ -44,16 +44,13 @@ SUBJECT_DISPLAY_ALIASES = {
     "matematika": "Matematika",
 }
 
-
 def _canon(s: str) -> str:
     return re.sub(r"\s+", " ", s.strip().lower().replace("_", " "))
-
 
 def pretty_subject(col_name: str) -> str:
     """Ubah label kolom jadi nama mapel yang cantik untuk tampilan."""
     key = _canon(col_name)
     return SUBJECT_DISPLAY_ALIASES.get(key, col_name)
-
 
 def pick_col(cols: List[str], candidates: List[str]) -> Optional[str]:
     colset = {_canon(c): c for c in cols}
@@ -75,17 +72,14 @@ def pick_col(cols: List[str], candidates: List[str]) -> Optional[str]:
         return colset[best_key]
     return None
 
-
 def _strip_accents(txt: str) -> str:
     norm = unicodedata.normalize("NFKD", str(txt))
     return "".join(c for c in norm if not unicodedata.combining(c))
-
 
 def _norm_name(txt: str) -> str:
     t = _strip_accents(str(txt))
     t = re.sub(r"\s+", " ", t).strip()
     return t.casefold()  # lebih kuat daripada lower()
-
 
 @st.cache_data(show_spinner=False)
 def load_data(path: str) -> pd.DataFrame:
@@ -94,7 +88,6 @@ def load_data(path: str) -> pd.DataFrame:
         if df[c].dtype == object:
             df[c] = df[c].astype(str).str.strip()
     return df
-
 
 def infer_schema(df: pd.DataFrame) -> Tuple[str, Optional[str], Optional[str], List[str]]:
     cols = list(df.columns)
@@ -121,7 +114,6 @@ def infer_schema(df: pd.DataFrame) -> Tuple[str, Optional[str], Optional[str], L
         )
     return name_col, no_col, final_col, numeric_cols
 
-
 def compute_final_and_rank(
     df: pd.DataFrame, name_col: str, final_col: Optional[str], subject_cols: List[str]
 ) -> pd.DataFrame:
@@ -145,7 +137,6 @@ def compute_final_and_rank(
 
     return work
 
-
 def label_predikat(n: float) -> str:
     if n > 80:
         return "Sangat Baik"
@@ -155,14 +146,12 @@ def label_predikat(n: float) -> str:
         return "Tercapai Dasar"
     return "Belum Tercapai"
 
-
 def exact_match(df: pd.DataFrame, name_col: str, nama_input: str) -> pd.DataFrame:
     """Full-match nama TAPI case-insensitive via kolom _name_norm."""
     key = _norm_name(nama_input)
     if "_name_norm" in df.columns:
         return df[df["_name_norm"] == key]
     return df[df[name_col].astype(str).map(_norm_name) == key]
-
 
 def leaderboard_groups(df: pd.DataFrame, name_col: str, max_unique_ranks: int = 3):
     """
@@ -180,7 +169,6 @@ def leaderboard_groups(df: pd.DataFrame, name_col: str, max_unique_ranks: int = 
         if len(groups) >= max_unique_ranks:
             break
     return groups
-
 
 # =================== DARK THEME + MODERN UI ===================
 st.markdown(
@@ -306,6 +294,7 @@ try:
     name_col, no_col, final_col, subject_cols = infer_schema(df_raw)
     df = compute_final_and_rank(df_raw, name_col, final_col, subject_cols)
     total_peserta = len(df)
+    total_peringkat_unik = int(df["_final_round"].nunique())  # <<— jumlah tingkat peringkat (dense)
     # kolom normalisasi nama untuk pencarian case-insensitive
     df["_name_norm"] = df[name_col].astype(str).map(_norm_name)
 except Exception as e:
@@ -320,11 +309,9 @@ def goto_result(nama: str):
     st.query_params.from_dict({"view": "result", "q": nama})
     st.rerun()
 
-
 def goto_search():
     st.query_params.clear()
     st.rerun()
-
 
 def card_html(title: str, body_html: str, plain: bool = False) -> str:
     klass = "card-plain" if plain else "card"
@@ -334,7 +321,6 @@ def card_html(title: str, body_html: str, plain: bool = False) -> str:
         {body_html}
       </div>
     """
-
 
 # ============== PAGE: SEARCH ==============
 def page_search():
@@ -367,14 +353,11 @@ def page_search():
         else:
             exists = df["_name_norm"].eq(_norm_name(nama)).any()
             if not exists:
-                st.session_state["search_error"] = (
-                    "Nama tidak ditemukan."
-                )
+                st.session_state["search_error"] = "Nama tidak ditemukan."
             else:
                 st.session_state["search_error"] = ""
                 goto_result(nama)
         st.rerun()
-
 
 # ============== PAGE: RESULT ==============
 def page_result(nama_param: str):
@@ -412,10 +395,14 @@ def page_result(nama_param: str):
     st.button("← Kembali", on_click=goto_search, use_container_width=True)
 
     # ===== IDENTITAS & PERINGKAT =====
+    # Ganti chip: tampilkan peringkat relatif terhadap JUMLAH PERINGKAT UNIK, bukan jumlah peserta
     ident_body = (
         f"<p style='margin:.3rem 0 0;'>Selamat datang, <b>{row[name_col]}</b></p>"
         + (f"<p style='margin:.1rem 0 0;'><b>Nomor Urut</b>: {row[no_col]}</p>" if no_col else "")
-        + f"<div style='margin-top:.6rem;'><span class='chip'>Peringkat {int(row['_rank'])} dari {total_peserta}</span></div>"
+        + "<div style='margin-top:.6rem;'>"
+        + f"<span class='chip' title='Skor sama → peringkat sama'>Peringkat {int(row['_rank'])} dari {total_peringkat_unik} peringkat</span>"
+        + f"<span class='chip' style='margin-left:6px;'>Total {total_peserta} peserta</span>"
+        + "</div>"
     )
     st.markdown(card_html("Hasil Try Out", ident_body), unsafe_allow_html=True)
 
@@ -436,7 +423,7 @@ def page_result(nama_param: str):
     for c in sorted(subject_cols):
         v = pd.to_numeric(row[c], errors="coerce")
         if pd.notna(v):
-            label = pretty_subject(c)  # <<— tampilkan label mapel cantik
+            label = pretty_subject(c)
             items.append(f"<div class='pill'><span>{label}</span> {int(round(v))}</div>")
     if items:
         grid_html = "<div class='grid'>" + "".join(items) + "</div>"
@@ -458,7 +445,6 @@ def page_result(nama_param: str):
         lb_parts.append(header + names_html)
     lb_html = "<div class='lb'>" + "".join(lb_parts) + "</div>"
     st.markdown(card_html("Peringkat Teratas", lb_html), unsafe_allow_html=True)
-
 
 # ===== Render route =====
 view = st.query_params.get("view", "search")
