@@ -400,7 +400,7 @@ def page_result(nama_param: str):
         f"<p style='margin:.3rem 0 0;'>Selamat datang, <b>{row[name_col]}</b></p>"
         + (f"<p style='margin:.1rem 0 0;'><b>Nomor Urut</b>: {row[no_col]}</p>" if no_col else "")
         + "<div style='margin-top:.6rem;'>"
-        + f"<span class='chip' title='Skor sama → peringkat sama'>Peringkat {int(row['_rank'])} dari {total_peringkat_unik} peringkat</span>"
+        + f"<span class='chip' title='Skor sama → peringkat sama'>Peringkat {int(row['_rank'])} dari {total_peringkat_unik} Peringkat (Skor sama → Peringkat sama) </span>"
         + f"<span class='chip' style='margin-left:6px;'>Total {total_peserta} peserta</span>"
         + "</div>"
     )
