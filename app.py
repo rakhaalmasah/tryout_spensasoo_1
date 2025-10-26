@@ -370,7 +370,7 @@ def page_search():
             exists = df["_name_norm"].eq(_norm_name(nama)).any()
             if not exists:
                 st.session_state["search_error"] = (
-                    "Nama tidak ada di data. Cek ejaan ya (huruf besar/kecil tidak berpengaruh)."
+                    "Nama tidak ditemukan."
                 )
             else:
                 st.session_state["search_error"] = ""
@@ -382,7 +382,7 @@ def page_search():
 def page_result(nama_param: str):
     df_hit = exact_match(df, name_col, nama_param.strip())
     if df_hit.empty:
-        st.warning("Nama tidak ada di data. Cek ejaan (huruf besar/kecil bebas).")
+        st.warning("Nama tidak ditemukan.")
         st.button("← Kembali", on_click=goto_search, use_container_width=True)
         return
 
