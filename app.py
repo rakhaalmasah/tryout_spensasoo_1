@@ -147,15 +147,13 @@ def compute_final_and_rank(
 
 
 def label_predikat(n: float) -> str:
-    if n >= 90:
-        return "Istimewa"
-    if n >= 85:
+    if n > 80:
         return "Sangat Baik"
     if n >= 75:
-        return "Baik"
-    if n >= 65:
-        return "Cukup"
-    return "Perlu Bimbingan"
+        return "Tercapai Optimal"
+    if n >= 67:
+        return "Tercapai Dasar"
+    return "Belum Tercapai"
 
 
 def exact_match(df: pd.DataFrame, name_col: str, nama_input: str) -> pd.DataFrame:
