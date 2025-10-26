@@ -12,6 +12,7 @@
 # Jika "Skor Akhir" tidak ada, aplikasi menghitung rata-rata dari semua kolom numerik.
 
 import re
+import unicodedata
 from typing import List, Tuple, Optional
 
 import pandas as pd
@@ -32,9 +33,26 @@ NAME_CANDS = ["nama", "nama lengkap", "nama_lengkap", "siswa", "full name"]
 NO_CANDS = ["no", "no urut", "nomor", "nomor urut", "urut"]
 FINAL_CANDS = ["skor akhir", "nilai akhir", "nilai total", "total", "score", "skor"]
 
+# Pemetaan label mapel saat DITAMPILKAN (nama kolom di Excel tidak diubah)
+SUBJECT_DISPLAY_ALIASES = {
+    "bhs": "Bahasa Indonesia",
+    "ind": "Bahasa Indonesia",
+    "b indonesia": "Bahasa Indonesia",
+    "b. indonesia": "Bahasa Indonesia",
+    "mat": "Matematika",
+    "mtk": "Matematika",
+    "matematika": "Matematika",
+}
+
 
 def _canon(s: str) -> str:
     return re.sub(r"\s+", " ", s.strip().lower().replace("_", " "))
+
+
+def pretty_subject(col_name: str) -> str:
+    """Ubah label kolom jadi nama mapel yang cantik untuk tampilan."""
+    key = _canon(col_name)
+    return SUBJECT_DISPLAY_ALIASES.get(key, col_name)
 
 
 def pick_col(cols: List[str], candidates: List[str]) -> Optional[str]:
@@ -56,6 +74,17 @@ def pick_col(cols: List[str], candidates: List[str]) -> Optional[str]:
     if best_score >= 80 and best_key is not None:
         return colset[best_key]
     return None
+
+
+def _strip_accents(txt: str) -> str:
+    norm = unicodedata.normalize("NFKD", str(txt))
+    return "".join(c for c in norm if not unicodedata.combining(c))
+
+
+def _norm_name(txt: str) -> str:
+    t = _strip_accents(str(txt))
+    t = re.sub(r"\s+", " ", t).strip()
+    return t.casefold()  # lebih kuat daripada lower()
 
 
 @st.cache_data(show_spinner=False)
@@ -129,9 +158,12 @@ def label_predikat(n: float) -> str:
     return "Perlu Bimbingan"
 
 
-def exact_match(df: pd.DataFrame, name_col: str, nama: str) -> pd.DataFrame:
-    # HARUS SAMA PERSIS (case-sensitive)
-    return df[df[name_col].str.fullmatch(re.escape(nama), na=False)]
+def exact_match(df: pd.DataFrame, name_col: str, nama_input: str) -> pd.DataFrame:
+    """Full-match nama TAPI case-insensitive via kolom _name_norm."""
+    key = _norm_name(nama_input)
+    if "_name_norm" in df.columns:
+        return df[df["_name_norm"] == key]
+    return df[df[name_col].astype(str).map(_norm_name) == key]
 
 
 def leaderboard_groups(df: pd.DataFrame, name_col: str, max_unique_ranks: int = 3):
@@ -164,9 +196,9 @@ st.markdown(
         --ink:#f8fafc;
         --muted:#cbd5e1;
         --brand:#38bdf8;
-        --gradA:#2dd4bf;  /* teal */
-        --gradB:#60a5fa;  /* blue */
-        --okA:#22c55e;    /* green */
+        --gradA:#2dd4bf;
+        --gradB:#60a5fa;
+        --okA:#22c55e;
         --okB:#16a34a;
       }
 
@@ -174,11 +206,9 @@ st.markdown(
       #MainMenu, header, footer { visibility: hidden; }
       .block-container{ padding-top:1.6rem; max-width:980px; }
 
-      /* Typography */
       h1,h2,h3,h4,h5,h6, p, li, label, .stMarkdown { color: var(--ink) !important; }
       a { color: var(--brand) !important; text-decoration: none; }
 
-      /* Inputs */
       [data-baseweb="input"] input{
         background: #0c1426 !important;
         color: var(--ink) !important;
@@ -199,7 +229,6 @@ st.markdown(
         border-color:#334155;
       }
 
-      /* Cards */
       .card, .card-plain{
         border-radius: 18px;
         border: 1px solid var(--border);
@@ -210,7 +239,6 @@ st.markdown(
       }
       .card-plain{ background: #0c152b; }
 
-      /* Hero */
       .hero{ display:flex; gap:14px; align-items:center; margin:0 0 10px 0; }
       .hero-icon{
         width:48px; height:48px; border-radius:14px;
@@ -220,7 +248,6 @@ st.markdown(
       }
       .subtitle{ color: var(--muted); font-size:14px; margin-top:-2px; }
 
-      /* Metric */
       .metric-wrap{
         position: relative;
         border-radius: 18px;
@@ -242,7 +269,6 @@ st.markdown(
         font-size:12px; margin-left:8px;
       }
 
-      /* Grid nilai */
       .grid{ display:grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap:12px; }
       @media (max-width: 640px){ .grid{ grid-template-columns:1fr; } }
       .pill{
@@ -254,7 +280,6 @@ st.markdown(
       }
       .pill span{ font-weight:500; color:var(--muted); }
 
-      /* Leaderboard */
       .lb{ display:flex; flex-direction:column; gap:10px; }
       .lb-rank{ font-weight:800; color:#e5e7eb; margin-top:6px; }
       .lb-item{ display:flex; align-items:center; gap:10px; padding:6px 0; color:var(--ink); }
@@ -284,13 +309,14 @@ try:
     name_col, no_col, final_col, subject_cols = infer_schema(df_raw)
     df = compute_final_and_rank(df_raw, name_col, final_col, subject_cols)
     total_peserta = len(df)
+    # kolom normalisasi nama untuk pencarian case-insensitive
+    df["_name_norm"] = df[name_col].astype(str).map(_norm_name)
 except Exception as e:
     st.error(f"Gagal memuat data: {e}")
     st.stop()
 
 # =================== ROUTING ===================
 def goto_result(nama: str):
-    # bersihkan state input agar tidak ada "ghost field" saat pindah halaman
     for k in list(st.session_state.keys()):
         if k.startswith("search_"):
             st.session_state.pop(k, None)
@@ -327,13 +353,12 @@ def page_search():
     with st.form("search_form", clear_on_submit=False):
         nama = st.text_input(
             "Nama Lengkap",
-            placeholder="Silahkan ketik nama lengkap Anda",
+            placeholder="Silakan ketik nama lengkap anda",
             key="search_name",
             label_visibility="visible",
         )
         submitted = st.form_submit_button("Tampilkan Hasil")
 
-    # tampilkan pesan error dari submit sebelumnya
     if st.session_state.get("search_error"):
         st.warning(st.session_state["search_error"])
         st.session_state["search_error"] = ""
@@ -343,11 +368,10 @@ def page_search():
         if not nama:
             st.session_state["search_error"] = "Nama belum diisi."
         else:
-            # VALIDASI: harus ada di data dan HARUS SAMA PERSIS (case-sensitive)
-            exists = df[name_col].astype(str).str.fullmatch(re.escape(nama), na=False).any()
+            exists = df["_name_norm"].eq(_norm_name(nama)).any()
             if not exists:
                 st.session_state["search_error"] = (
-                    "Nama tidak ada di data. Harap ketik **sama persis** seperti di data."
+                    "Nama tidak ada di data. Cek ejaan ya (huruf besar/kecil tidak berpengaruh)."
                 )
             else:
                 st.session_state["search_error"] = ""
@@ -359,7 +383,7 @@ def page_search():
 def page_result(nama_param: str):
     df_hit = exact_match(df, name_col, nama_param.strip())
     if df_hit.empty:
-        st.warning("Nama tidak ada di data. Harap ketik **sama persis** seperti di data.")
+        st.warning("Nama tidak ada di data. Cek ejaan (huruf besar/kecil bebas).")
         st.button("← Kembali", on_click=goto_search, use_container_width=True)
         return
 
@@ -387,7 +411,7 @@ def page_result(nama_param: str):
 
     row = df_hit.iloc[0]
 
-    # Tombol kembali (gaya modern)
+    # Tombol kembali
     st.button("← Kembali", on_click=goto_search, use_container_width=True)
 
     # ===== IDENTITAS & PERINGKAT =====
@@ -415,7 +439,8 @@ def page_result(nama_param: str):
     for c in sorted(subject_cols):
         v = pd.to_numeric(row[c], errors="coerce")
         if pd.notna(v):
-            items.append(f"<div class='pill'><span>{c}</span> {int(round(v))}</div>")
+            label = pretty_subject(c)  # <<— tampilkan label mapel cantik
+            items.append(f"<div class='pill'><span>{label}</span> {int(round(v))}</div>")
     if items:
         grid_html = "<div class='grid'>" + "".join(items) + "</div>"
     else:
@@ -424,7 +449,7 @@ def page_result(nama_param: str):
         )
     st.markdown(card_html("Hasil Nilai", grid_html), unsafe_allow_html=True)
 
-    # ===== LEADERBOARD (3 grup skor tertinggi, tie-aware) =====
+    # ===== LEADERBOARD =====
     groups = leaderboard_groups(df, name_col, max_unique_ranks=3)
     medal_map = {1: "🥇", 2: "🥈", 3: "🥉"}
     lb_parts = []
