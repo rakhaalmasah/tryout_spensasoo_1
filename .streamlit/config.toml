@@ -1,0 +1,7 @@
+# .streamlit/config.toml — tema dark modern
+[theme]
+base = "dark"
+primaryColor = "#38bdf8"
+backgroundColor = "#0b1324"
+secondaryBackgroundColor = "#0f172a"
+textColor = "#f8fafc"
